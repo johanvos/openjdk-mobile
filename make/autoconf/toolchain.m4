@@ -187,15 +187,19 @@ AC_DEFUN([TOOLCHAIN_SETUP_FILENAME_PATTERNS],
     STATIC_LIBRARY_SUFFIX='.a'
     SHARED_LIBRARY='lib[$]1.so'
     STATIC_LIBRARY='lib[$]1.a'
+    BUILD_SHARED_LIBRARY_SUFFIX='.so'
+    BUILD_SHARED_LIBRARY='lib[$]1.so'
     OBJ_SUFFIX='.o'
     EXE_SUFFIX=''
-    if test "x$OPENJDK_TARGET_OS" = xmacosx; then
+    if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
       # For full static builds, we're overloading the SHARED_LIBRARY
       # variables in order to limit the amount of changes required.
       # It would be better to remove SHARED and just use LIBRARY and
       # LIBRARY_SUFFIX for libraries that can be built either
       # shared or static and use STATIC_* for libraries that are
       # always built statically.
+      BUILD_SHARED_LIBRARY='lib[$]1.dylib'
+      BUILD_SHARED_LIBRARY_SUFFIX='.dylib'
       if test "x$STATIC_BUILD" = xtrue; then
         SHARED_LIBRARY='lib[$]1.a'
         SHARED_LIBRARY_SUFFIX='.a'
@@ -210,6 +214,8 @@ AC_DEFUN([TOOLCHAIN_SETUP_FILENAME_PATTERNS],
   AC_SUBST(SHARED_LIBRARY_SUFFIX)
   AC_SUBST(STATIC_LIBRARY_SUFFIX)
   AC_SUBST(SHARED_LIBRARY)
+  AC_SUBST(BUILD_SHARED_LIBRARY_SUFFIX)
+  AC_SUBST(BUILD_SHARED_LIBRARY)
   AC_SUBST(STATIC_LIBRARY)
   AC_SUBST(OBJ_SUFFIX)
   AC_SUBST(EXE_SUFFIX)
@@ -226,8 +232,9 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
   toolchain_var_name=VALID_TOOLCHAINS_$OPENJDK_BUILD_OS
   VALID_TOOLCHAINS=${!toolchain_var_name}
 
-  if test "x$OPENJDK_TARGET_OS" = xmacosx; then
+  if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
     if test -n "$XCODEBUILD"; then
+      TOOLCHAIN_NAME="xcode"
       # On Mac OS X, default toolchain to clang after Xcode 5
       XCODE_VERSION_OUTPUT=`"$XCODEBUILD" -version 2>&1 | $HEAD -n 1`
       $ECHO "$XCODE_VERSION_OUTPUT" | $GREP "Xcode " > /dev/null
@@ -277,6 +284,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
     TOOLCHAIN_TYPE=$DEFAULT_TOOLCHAIN
   fi
   AC_SUBST(TOOLCHAIN_TYPE)
+  AC_SUBST(TOOLCHAIN_NAME)
 
   TOOLCHAIN_CC_BINARY_clang="clang"
   TOOLCHAIN_CC_BINARY_gcc="gcc"
@@ -762,7 +770,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETECT_TOOLCHAIN_CORE],
 # and/or are not needed on all platforms.
 AC_DEFUN_ONCE([TOOLCHAIN_DETECT_TOOLCHAIN_EXTRA],
 [
-  if test "x$OPENJDK_TARGET_OS" = "xmacosx"; then
+  if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios"; then
     BASIC_PATH_PROGS(LIPO, lipo)
     BASIC_FIXUP_EXECUTABLE(LIPO)
     BASIC_REQUIRE_PROGS(OTOOL, otool)
@@ -812,7 +820,8 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETECT_TOOLCHAIN_EXTRA],
 
   # objcopy is used for moving debug symbols to separate files when
   # full debug symbols are enabled.
-  if test "x$OPENJDK_TARGET_OS" = xsolaris || test "x$OPENJDK_TARGET_OS" = xlinux; then
+  if test "x$OPENJDK_TARGET_OS" = xsolaris || test "x$OPENJDK_TARGET_OS" = xlinux || \
+      test "x$OPENJDK_TARGET_OS" = xandroid ; then
     BASIC_CHECK_TOOLS(OBJCOPY, [gobjcopy objcopy])
     # Only call fixup if objcopy was found.
     if test -n "$OBJCOPY"; then
@@ -879,7 +888,7 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETECT_TOOLCHAIN_EXTRA],
 # for this, we can only do this after these have been setup.
 AC_DEFUN_ONCE([TOOLCHAIN_SETUP_BUILD_COMPILERS],
 [
-  if test "x$COMPILE_TYPE" = "xcross"; then
+  if test "x$COMPILE_TYPE" = "xcross" && test "x$OPENJDK_TARGET_OS" != xios ; then
     # Now we need to find a C/C++ compiler that can build executables for the
     # build platform. We can't use the AC_PROG_CC macro, since it can only be
     # used once. Also, we need to do this without adding a tools dir to the
@@ -925,6 +934,9 @@ AC_DEFUN_ONCE([TOOLCHAIN_SETUP_BUILD_COMPILERS],
           AC_MSG_RESULT([$BUILD_DEVKIT_NAME in $BUILD_DEVKIT_ROOT])
         else
           AC_MSG_RESULT([$BUILD_DEVKIT_ROOT])
+        fi
+        if test "x$BUILD_SYSROOT" != "x"; then
+          BUILD_SYSROOT="$BUILD_DEVKIT_SYSROOT"
         fi
 
         BUILD_SYSROOT="$BUILD_DEVKIT_SYSROOT"
@@ -976,6 +988,13 @@ AC_DEFUN_ONCE([TOOLCHAIN_SETUP_BUILD_COMPILERS],
     BUILD_AS="$AS"
     BUILD_OBJCOPY="$OBJCOPY"
     BUILD_STRIP="$STRIP"
+    if test "x$BUILD_SYSROOT" != "x"; then
+      FLAGS_SETUP_SYSROOT_FLAGS([BUILD_])
+    else
+      BUILD_SYSROOT_CFLAGS="$SYSROOT_CFLAGS"
+      BUILD_SYSROOT_LDFLAGS="$SYSROOT_LDFLAGS"
+    fi
+
     BUILD_AR="$AR"
 
     TOOLCHAIN_PREPARE_FOR_VERSION_COMPARISONS([], [OPENJDK_BUILD_])

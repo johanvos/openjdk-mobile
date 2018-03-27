@@ -191,7 +191,7 @@ AC_DEFUN([BOOTJDK_CHECK_LIBEXEC_JAVA_HOME],
 # Test: On MacOS X, can we find a boot jdk using /usr/libexec/java_home?
 AC_DEFUN([BOOTJDK_CHECK_MACOSX_JAVA_LOCATOR],
 [
-  if test "x$OPENJDK_TARGET_OS" = xmacosx; then
+  if test "x$OPENJDK_BUILD_OS" = xmacosx; then
     # First check at user selected default
     BOOTJDK_DO_CHECK([BOOTJDK_CHECK_LIBEXEC_JAVA_HOME()])
     # If that did not work out (e.g. too old), try explicit versions instead

@@ -659,6 +659,11 @@ AC_DEFUN_ONCE([BASIC_SETUP_DEVKIT],
       [SYSROOT=$with_sysroot]
   )
 
+  AC_ARG_WITH(build_sysroot, [AS_HELP_STRING([--with-build-sysroot],
+      [use this directory as build_sysroot])],
+      [BUILD_SYSROOT=$with_build_sysroot]
+  )
+
   AC_ARG_WITH([tools-dir], [AS_HELP_STRING([--with-tools-dir],
       [alias for --with-toolchain-path for backwards compatibility])],
       [BASIC_PREPEND_TO_PATH([TOOLCHAIN_PATH],$with_tools_dir)]
@@ -674,7 +679,7 @@ AC_DEFUN_ONCE([BASIC_SETUP_DEVKIT],
       [BASIC_PREPEND_TO_PATH([EXTRA_PATH],$with_extra_path)]
   )
 
-  if test "x$OPENJDK_BUILD_OS" = "xmacosx"; then
+  if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
     # If a devkit has been supplied, find xcodebuild in the toolchain_path.
     # If not, detect if Xcode is installed by running xcodebuild -version
     # if no Xcode installed, xcodebuild exits with 1
@@ -1109,7 +1114,7 @@ AC_DEFUN_ONCE([BASIC_SETUP_COMPLEX_TOOLS],
   fi
   AC_SUBST(IS_GNU_TIME)
 
-  if test "x$OPENJDK_TARGET_OS" = "xmacosx"; then
+  if test "x$OPENJDK_TARGET_OS" = "xmacosx" || test "x$OPENJDK_TARGET_OS" = "xios" ; then
     BASIC_REQUIRE_PROGS(DSYMUTIL, dsymutil)
     BASIC_REQUIRE_PROGS(XATTR, xattr)
     BASIC_PATH_PROGS(CODESIGN, codesign)
