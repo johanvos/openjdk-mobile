@@ -111,9 +111,11 @@
 
 #ifdef __APPLE__
   #include <mach/mach.h> // semaphore_* API
+#if ! TARGET_OS_IPHONE
   #include <mach-o/dyld.h>
   #include <sys/proc_info.h>
   #include <objc/objc-auto.h>
+#endif
 #endif
 
 #ifndef MAP_ANONYMOUS
@@ -212,6 +214,8 @@ static char cpu_arch[] = "i386";
 static char cpu_arch[] = "amd64";
 #elif defined(ARM)
 static char cpu_arch[] = "arm";
+#elif defined(AARCH64)
+static char cpu_arch[] = "aarch64";
 #elif defined(PPC32)
 static char cpu_arch[] = "ppc";
 #elif defined(SPARC)
@@ -359,6 +363,10 @@ void os::init_system_properties_values() {
     if (pslash != NULL) {
       *pslash = '\0';            // Get rid of /{client|server|hotspot}.
     }
+#ifdef STATIC_BUILD
+    strcat(buf, "/lib");
+#endif
+
     Arguments::set_dll_dir(buf);
 
     if (pslash != NULL) {
@@ -372,6 +380,7 @@ void os::init_system_properties_values() {
       }
     }
     Arguments::set_java_home(buf);
+
     set_boot_path('/', ':');
   }
 
@@ -431,6 +440,43 @@ void os::init_system_properties_values() {
     char *pslash;
     os::jvm_path(buf, bufsize);
 
+#if defined(STATIC_BUILD) &&  TARGET_OS_IPHONE
+    char *dll_path;
+    // For iOS this path will be something like
+    // /Users/ankinelaturu/Library/Application Support/iPhone Simulator/5.0/Applications/78F08E4B-E00F-4CAD-A67C-ACC11DB8CFB5/MyApp.app/MyApp
+    // MyApp is the executable and everything is statically linked.
+    // just get rid of the /MyApp.
+    // The lib folder will be bundled with the App. So the lib folder path will be
+    // /Users/ankinelaturu/Library/Application Support/iPhone Simulator/5.0/Applications/78F08E4B-E00F-4CAD-A67C-ACC11DB8CFB5/MyApp.app/lib
+    *(strrchr(buf, '/')) = '\0'; /* removes MyApp */
+    pslash = NULL; /* do not remove anything else (lib part not in buf) */
+
+    // Allow the java_home and dll_path to be overridden by -Djava.home=
+    // In this case, java.home must be set to the directory that contains
+    // the lib directory and all of its contents.
+    if (_java_home != NULL) {
+      strncpy(buf, _java_home, bufsize);
+    }
+
+    // At this point buf contains path to MyApp.app, add /lib
+    // for dll_path.  Although the iOS JRE will be a static app
+    // We will want to support some select .dylibs for JVMTI, etc.
+    // Added the cpu_arch for standard jre directory structure.
+    dll_path = (char *)NEW_C_HEAP_ARRAY(char, strlen(buf)
+                      + sizeof("/lib/")
+                      + strlen(cpu_arch)
+                      + 1,
+                      mtInternal);
+    if (dll_path == NULL)
+      return;
+    strcpy(dll_path, buf);
+    strcat(dll_path, os::file_separator());
+    strcat(dll_path, "lib");
+    strcat(dll_path, os::file_separator());
+    strcat(dll_path, cpu_arch);
+    Arguments::set_dll_dir(dll_path);
+
+#else
     // Found the full path to libjvm.so.
     // Now cut the path to <java_home>/jre if we can.
     *(strrchr(buf, '/')) = '\0'; // Get rid of /libjvm.so.
@@ -443,6 +489,8 @@ void os::init_system_properties_values() {
 #endif
 
     Arguments::set_dll_dir(buf);
+
+#endif // STATIC_BUILD and TARGET_OS_IPHONE
 
     if (pslash != NULL) {
       pslash = strrchr(buf, '/');
@@ -1483,10 +1531,14 @@ void * os::dll_load(const char *filename, char *ebuf, int ebuflen) {
 
 void* os::get_default_process_handle() {
 #ifdef __APPLE__
+#ifdef TARGET_OS_IPHONE
+  return RTLD_SELF;
+#else
   // MacOS X needs to use RTLD_FIRST instead of RTLD_LAZY
   // to avoid finding unexpected symbols on second (or later)
   // loads of a library.
   return (void*)::dlopen(NULL, RTLD_FIRST);
+#endif
 #else
   return (void*)::dlopen(NULL, RTLD_LAZY);
 #endif
@@ -1544,7 +1596,7 @@ int os::get_loaded_modules_info(os::LoadedModulesCallbackFunc callback, void *pa
   }
 
   dlclose(handle);
-#elif defined(__APPLE__)
+#elif defined(__APPLE__) && ! TARGET_OS_IPHONE
   for (uint32_t i = 1; i < _dyld_image_count(); i++) {
     // Value for top_address is returned as 0 since we don't have any information about module size
     if (callback(_dyld_get_image_name(i), (address)_dyld_get_image_header(i), (address)0, param)) {
@@ -3268,7 +3320,7 @@ void os::init(void) {
   Bsd::clock_init();
   initial_time_count = javaTimeNanos();
 
-#ifdef __APPLE__
+#if defined(__APPLE__) &&  ! TARGET_OS_IPHONE
   // XXXDARWIN
   // Work around the unaligned VM callbacks in hotspot's
   // sharedRuntime. The callbacks don't use SSE2 instructions, and work on
@@ -3392,6 +3444,7 @@ int os::active_processor_count() {
 
 void os::set_native_thread_name(const char *name) {
 #if defined(__APPLE__) && MAC_OS_X_VERSION_MIN_REQUIRED > MAC_OS_X_VERSION_10_5
+#if ! TARGET_OS_IPHONE
   // This is only supported in Snow Leopard and beyond
   if (name != NULL) {
     // Add a "Java: " prefix to the name
@@ -3399,6 +3452,7 @@ void os::set_native_thread_name(const char *name) {
     snprintf(buf, sizeof(buf), "Java: %s", name);
     pthread_setname_np(buf);
   }
+#endif
 #endif
 }
 
@@ -3820,6 +3874,7 @@ void os::pause() {
   }
 }
 
+#if ! TARGET_OS_IPHONE
 // Darwin has no "environ" in a dynamic library.
 #ifdef __APPLE__
   #include <crt_externs.h>
@@ -3893,6 +3948,9 @@ int os::fork_and_exec(char* cmd) {
     }
   }
 }
+#else // TARGET_OS_IPHONE
+int os::fork_and_exec(char* cmd) { return -1; }
+#endif // TARGET_OS_IPHONE
 
 // Get the default path to the core file
 // Returns the length of the string
@@ -3910,6 +3968,10 @@ void TestReserveMemorySpecial_test() {
   // No tests available for this platform
 }
 #endif
+
+void os::set_jvm_path(const char *jvm_home) {
+  _java_home = jvm_home;
+}
 
 bool os::start_debugging(char *buf, int buflen) {
   int len = (int)strlen(buf);

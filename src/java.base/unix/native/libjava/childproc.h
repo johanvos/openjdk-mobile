@@ -29,8 +29,13 @@
 #include <sys/types.h>
 
 #ifdef __APPLE__
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+char **environ;
+#else
 #include <crt_externs.h>
 #define environ (*_NSGetEnviron())
+#endif // TARGET_OS_IPHONE
 #else
 /* This is one of the rare times it's more portable to declare an
  * external symbol explicitly, rather than via a system header.
@@ -44,7 +49,7 @@
  * environ, are defined in at least one of the headers" (!)
  */
 extern char **environ;
-#endif
+#endif // __APPLE__
 
 #ifdef __linux__
 #include <sched.h>

@@ -50,7 +50,8 @@
   } while((_result == -1) && (errno == EINTR)); \
 } while(0)
 
-#if defined(_ALLBSD_SOURCE)
+#if defined(_ALLBSD_SOURCE) || defined(__ANDROID__)
+
 #define dirent64 dirent
 #define readdir64_r readdir_r
 #endif
@@ -849,6 +850,7 @@ findJavaTZ_md(const char *java_home_dir)
 char *
 getGMTOffsetID()
 {
+#ifndef __ANDROID__
     time_t offset;
     char sign, buf[32];
     struct tm local_tm;
@@ -871,6 +873,9 @@ getGMTOffsetID()
     sprintf(buf, (const char *)"GMT%c%02d:%02d",
             sign, (int)(offset/3600), (int)((offset%3600)/60));
     return strdup(buf);
+#else
+    return strdup("GMT-0:00");
+#endif
 }
 
 #else
@@ -878,6 +883,7 @@ getGMTOffsetID()
 char *
 getGMTOffsetID()
 {
+#ifndef __ANDROID__
     time_t offset;
     char sign, buf[32];
 #if defined(__solaris__)
@@ -908,5 +914,8 @@ getGMTOffsetID()
     sprintf(buf, (const char *)"GMT%c%02d:%02d",
             sign, (int)(offset/3600), (int)((offset%3600)/60));
     return strdup(buf);
+#else
+    return strdup("GMT-0:00");
+#endif
 }
 #endif /* MACOSX */

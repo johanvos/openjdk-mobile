@@ -39,10 +39,18 @@
 
 #include "manifest_info.h"
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+
+#if ! TARGET_OS_IPHONE
 /* Support Cocoa event loop on the main thread */
 #include <Cocoa/Cocoa.h>
 #include <objc/objc-runtime.h>
 #include <objc/objc-auto.h>
+#endif
+#else
+#define TARGET_OS_IPHONE 0
+#endif
 
 #include <errno.h>
 #include <spawn.h>
@@ -210,6 +218,12 @@ static InvocationFunctions *GetExportedJNIFunctions() {
         preferredJVM = "client";
 #elif defined(__x86_64__)
         preferredJVM = "server";
+#elif defined(__arm__)
+        preferredJVM = "client";
+#elif defined(__arm64__)
+        preferredJVM = "zero";
+#elif defined(__aarch64__)
+        preferredJVM = "zero";
 #else
 #error "Unknown architecture - needs definition"
 #endif
@@ -232,7 +246,7 @@ static InvocationFunctions *GetExportedJNIFunctions() {
     return sExportedJNIFunctions = fxns;
 }
 
-#ifndef STATIC_BUILD
+#if !defined(STATIC_BUILD) && ! TARGET_OS_IPHONE
 
 JNIEXPORT jint JNICALL
 JNI_GetDefaultJavaVMInitArgs(void *args) {
@@ -270,7 +284,7 @@ JLI_SetPreferredJVM(const char *prefJVM) {
     sPreferredJVMType = strdup(prefJVM);
 }
 
-static BOOL awtLoaded = NO;
+static jboolean awtLoaded = 0;
 static pthread_mutex_t awtLoaded_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  awtLoaded_cv = PTHREAD_COND_INITIALIZER;
 
@@ -278,7 +292,7 @@ JNIEXPORT void JNICALL
 JLI_NotifyAWTLoaded()
 {
     pthread_mutex_lock(&awtLoaded_mutex);
-    awtLoaded = YES;
+    awtLoaded = 1;
     pthread_cond_signal(&awtLoaded_cv);
     pthread_mutex_unlock(&awtLoaded_mutex);
 }
@@ -307,6 +321,7 @@ static void *apple_main (void *arg)
     exit(main_fptr(args->argc, args->argv));
 }
 
+#if ! TARGET_OS_IPHONE
 static void dummyTimer(CFRunLoopTimerRef timer, void *info) {}
 
 static void ParkEventLoop() {
@@ -321,6 +336,7 @@ static void ParkEventLoop() {
         result = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0e20, false);
     } while (result != kCFRunLoopRunFinished);
 }
+#endif
 
 /*
  * Mac OS X mandates that the GUI event loop run on very first thread of
@@ -351,7 +367,9 @@ static void MacOSXStartup(int argc, char *argv[]) {
         exit(1);
     }
 
-    ParkEventLoop();
+ #if ! TARGET_OS_IPHONE
+   ParkEventLoop();
+#endif
 }
 
 void
@@ -467,6 +485,7 @@ GetJREPath(char *path, jint pathsize, jboolean speculative)
             JLI_TraceLauncher("Insufficient space to store JRE path\n");
             return JNI_FALSE;
         }
+
         /* Does the app ship a private JRE in <apphome>/jre directory? */
         JLI_Snprintf(libjava, sizeof(libjava), "%s/jre/lib/" JAVA_DLL, path);
         if (access(libjava, F_OK) == 0) {
@@ -481,21 +500,21 @@ GetJREPath(char *path, jint pathsize, jboolean speculative)
     dladdr(&GetJREPath, &selfInfo);
 
 #ifdef STATIC_BUILD
-    char jvm_cfg[MAXPATHLEN];
-    char *p = NULL;
-    strncpy(jvm_cfg, selfInfo.dli_fname, MAXPATHLEN);
-    p = strrchr(jvm_cfg, '/'); *p = '\0';
-    p = strrchr(jvm_cfg, '/');
-    if (strcmp(p, "/.") == 0) {
-      *p = '\0';
-      p = strrchr(jvm_cfg, '/'); *p = '\0';
-    }
-    else *p = '\0';
-    strncpy(path, jvm_cfg, pathsize);
-    strncat(jvm_cfg, "/lib/jvm.cfg", MAXPATHLEN);
-    if (access(jvm_cfg, F_OK) == 0) {
-      return JNI_TRUE;
-    }
+        char jvm_cfg[MAXPATHLEN];
+        char *p = NULL;
+        strncpy(jvm_cfg, selfInfo.dli_fname, MAXPATHLEN);
+        p = strrchr(jvm_cfg, '/'); *p = '\0';
+        p = strrchr(jvm_cfg, '/');
+        if (strcmp(p, "/.") == 0) {
+          *p = '\0';
+          p = strrchr(jvm_cfg, '/'); *p = '\0';
+        }
+        else *p = '\0';
+        strncpy(path, jvm_cfg, pathsize);
+        strncat(jvm_cfg, "/lib/jvm.cfg", MAXPATHLEN);
+        if (access(jvm_cfg, F_OK) == 0) {
+            return JNI_TRUE;
+        }
 #endif
 
     char *realPathToSelf = realpath(selfInfo.dli_fname, path);
@@ -536,7 +555,7 @@ LoadJavaVM(const char *jvmpath, InvocationFunctions *ifn)
 #ifndef STATIC_BUILD
     libjvm = dlopen(jvmpath, RTLD_NOW + RTLD_GLOBAL);
 #else
-    libjvm = dlopen(NULL, RTLD_FIRST);
+    libjvm = dlopen(NULL, RTLD_LAZY);
 #endif
     if (libjvm == NULL) {
         JLI_ReportErrorMessage(DLL_ERROR1, __LINE__);
@@ -885,6 +904,7 @@ int
 JVMInit(InvocationFunctions* ifn, jlong threadStackSize,
                  int argc, char **argv,
                  int mode, char *what, int ret) {
+#if ! TARGET_OS_IPHONE
     if (sameThread) {
         JLI_TraceLauncher("In same thread\n");
         // need to block this thread against the main thread
@@ -915,7 +935,11 @@ JVMInit(InvocationFunctions* ifn, jlong threadStackSize,
     } else {
         return ContinueInNewThread(ifn, threadStackSize, argc, argv, mode, what, ret);
     }
+#else
+        return ContinueInNewThread(ifn, threadStackSize, argc, argv, mode, what, ret);
+#endif
 }
+
 
 /*
  * Note the jvmInstance must be initialized first before entering into
@@ -940,4 +964,8 @@ ProcessPlatformOption(const char* arg)
     }
     // arguments we know not
     return JNI_FALSE;
+}
+
+void SetJavaHome(char *arg) {
+  (void)arg;
 }

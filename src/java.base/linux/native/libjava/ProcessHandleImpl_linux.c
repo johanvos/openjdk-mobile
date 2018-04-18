@@ -242,6 +242,7 @@ void os_getCmdlineAndUserInfo(JNIEnv *env, jobject jinfo, pid_t pid) {
     }
 }
 
+
 /**
  * Read the boottime from /proc/stat.
  */

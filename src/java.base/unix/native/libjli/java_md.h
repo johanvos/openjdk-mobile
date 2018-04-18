@@ -66,4 +66,7 @@ static jboolean GetJREPath(char *path, jint pathsize, jboolean speculative);
 #else  /* !MACOSX */
 #include "java_md_solinux.h"
 #endif /* MACOSX */
+#ifdef __ANDROID__
+#define S_IEXEC S_IXUSR
+#endif
 #endif /* JAVA_MD_H */

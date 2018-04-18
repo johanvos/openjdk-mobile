@@ -362,6 +362,10 @@ void Arguments::process_sun_java_launcher_properties(JavaVMInitArgs* args) {
       _sun_java_launcher_pid = atoi(tail);
       continue;
     }
+    if (match_option(option, "-Djava.home=", &tail)) {
+      os::set_jvm_path(tail);
+      continue;
+    }
   }
 }
 
@@ -2491,7 +2495,6 @@ jint Arguments::parse_vm_init_args(const JavaVMInitArgs *java_tool_options_args,
   if (result != JNI_OK) {
     return result;
   }
-
   // Parse args structure generated from the _JAVA_OPTIONS environment
   // variable (if present) (mimics classic VM)
   result = parse_each_vm_init_arg(java_options_args, &patch_mod_javabase, Flag::ENVIRON_VAR);
@@ -3259,11 +3262,21 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_m
   // Change the default value for flags  which have different default values
   // when working with older JDKs.
 #ifdef LINUX
- if (JDK_Version::current().compare_major(6) <= 0 &&
+  if (JDK_Version::current().compare_major(6) <= 0 &&
       FLAG_IS_DEFAULT(UseLinuxPosixThreadCPUClocks)) {
     FLAG_SET_DEFAULT(UseLinuxPosixThreadCPUClocks, false);
   }
 #endif // LINUX
+
+#if TARGET_OS_IPHONE
+  if (!DisableAttachMechanism) {
+    if (!FLAG_IS_DEFAULT(DisableAttachMechanism)) {
+      warning("The attach mechanism is disabled in this release.");
+    }
+    FLAG_SET_DEFAULT(DisableAttachMechanism, true);
+  }
+#endif
+
   fix_appclasspath();
   return JNI_OK;
 }

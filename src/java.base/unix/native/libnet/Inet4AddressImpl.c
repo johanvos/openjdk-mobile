@@ -22,13 +22,22 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#else
+#define TARGET_OS_IPHONE 0
+#endif
+
 #include <ctype.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/in_systm.h>
 #include <netinet/ip.h>
+#if ! TARGET_OS_IPHONE
 #include <netinet/ip_icmp.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -36,6 +45,10 @@
 #include "net_util.h"
 
 #include "java_net_Inet4AddressImpl.h"
+
+#if !defined(__ANDROID__) && (defined(__GLIBC__) || (defined(__FreeBSD__) && (__FreeBSD_version >= 601104)))
+#define HAS_GLIBC_GETHOSTBY_R   1
+#endif
 
 #if defined(MACOSX)
 extern jobjectArray lookupIfLocalhost(JNIEnv *env, const char *hostname, jboolean includeV6);
@@ -453,6 +466,7 @@ ping4(JNIEnv *env, jint fd, SOCKETADDRESS *sa, SOCKETADDRESS *netif,
         timeout -= 1000;
     } while (timeout > 0);
     close(fd);
+#endif // ! TARGET_OS_IPHONE
     return JNI_FALSE;
 }
 

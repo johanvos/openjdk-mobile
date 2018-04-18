@@ -30,10 +30,15 @@ extern jfieldID IO_fd_fdID;
 extern jfieldID IO_handle_fdID;
 extern jfieldID IO_append_fdID;
 
-#ifdef _ALLBSD_SOURCE
+#if defined (_ALLBSD_SOURCE) || defined(__ANDROID__)
 #include <fcntl.h>
 #ifndef O_SYNC
 #define O_SYNC  O_FSYNC
+#endif
+#ifdef __ANDROID__
+#ifndef O_FSYNC
+#define O_FSYNC O_SYNC
+#endif
 #endif
 #ifndef O_DSYNC
 #define O_DSYNC O_FSYNC

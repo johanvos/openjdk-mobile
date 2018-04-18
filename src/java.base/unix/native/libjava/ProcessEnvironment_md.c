@@ -29,9 +29,15 @@
 #include "jni_util.h"
 
 #ifdef __APPLE__
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+extern char **environ;
+#else
 #include <crt_externs.h>
 #define environ (*_NSGetEnviron())
+#endif // TARGET_OS_IPHONE
 #else
+#define TARGET_OS_IPHONE 0
 /* This is one of the rare times it's more portable to declare an
  * external symbol explicitly, rather than via a system header.
  * The declaration is standardized as part of UNIX98, but there is
@@ -49,6 +55,7 @@ extern char **environ;
 JNIEXPORT jobjectArray JNICALL
 Java_java_lang_ProcessEnvironment_environ(JNIEnv *env, jclass ign)
 {
+#if ! TARGET_OS_IPHONE
     jsize count = 0;
     jsize i, j;
     jobjectArray result;
@@ -87,6 +94,13 @@ Java_java_lang_ProcessEnvironment_environ(JNIEnv *env, jclass ign)
             j++;
         }
     }
+#else
+    jobjectArray result;
+    jclass byteArrCls = (*env)->FindClass(env, "[B");
+    result = (*env)->NewObjectArray(env, 0 /* count */, byteArrCls, 0);
+    if (result == NULL) return NULL;
+#endif
 
     return result;
 }
+

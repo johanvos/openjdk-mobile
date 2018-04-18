@@ -25,9 +25,18 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <net/if.h>
-#include <net/if_arp.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#else
+#define TARGET_OS_IPHONE 0
+#endif
+#if ! TARGET_OS_IPHONE
+#include <net/if_arp.h>
+#endif
+
 #include <sys/ioctl.h>
 
 #if defined(_AIX)
@@ -792,6 +801,7 @@ static jobject createNetworkInterface(JNIEnv *env, netif *ifs) {
  */
 static netif *enumInterfaces(JNIEnv *env) {
     netif *ifs = NULL;
+    netif *ifs_v6 = NULL;
     int sock;
 
     sock = openSocket(env, AF_INET);
@@ -818,8 +828,8 @@ static netif *enumInterfaces(JNIEnv *env) {
             return NULL;
         }
 
-        ifs = enumIPv6Interfaces(env, sock, ifs);
-        close(sock);
+         ifs_v6 = enumIPv6Interfaces(env, sock, ifs);
+         close(sock);
 
         if ((*env)->ExceptionOccurred(env)) {
             freeif(ifs);
@@ -827,7 +837,7 @@ static netif *enumInterfaces(JNIEnv *env) {
         }
     }
 
-    return ifs;
+        return (ifs_v6 ? ifs_v6: ifs);
 }
 
 /*
@@ -2006,6 +2016,7 @@ static netif *enumIPv4Interfaces(JNIEnv *env, int sock, netif *ifs) {
  * Enumerates and returns all IPv6 interfaces on BSD.
  */
 static netif *enumIPv6Interfaces(JNIEnv *env, int sock, netif *ifs) {
+#if ! TARGET_OS_IPHONE
     struct ifaddrs *ifa, *origifa;
 
     if (getifaddrs(&origifa) != 0) {
@@ -2040,6 +2051,9 @@ static netif *enumIPv6Interfaces(JNIEnv *env, int sock, netif *ifs) {
     // free ifaddrs buffer
     freeifaddrs(origifa);
     return ifs;
+#else
+    return (netif *)NULL;
+#endif // ! TARGET_OS_IPHONE
 }
 
 /*

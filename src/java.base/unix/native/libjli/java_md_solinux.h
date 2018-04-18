@@ -60,4 +60,19 @@ static const char *user_dir     = "/java";
 #include <pthread.h>
 #endif
 
+#ifdef __ANDROID__
+#undef printf
+#undef vprintf
+#undef vfprintf
+#undef fprintf
+
+extern int __android_log_print(int prio, const char *tag, const char *fmt, ...);
+extern int __android_log_vprint(int prio,const char *tag, const char *fmt, ...);
+
+#define printf(...) __android_log_print(3,"JLI", __VA_ARGS__)
+#define vfprintf(f, fmt, ...) __android_log_vprint(3,"JLI", fmt, __VA_ARGS__)
+#define vprintf(fmt, ...) __android_log_vprint(3,"JLI", fmt, __VA_ARGS__)
+#define fprintf(f, ...) __android_log_print(3,"JLI", __VA_ARGS__)
+#endif
+
 #endif /* JAVA_MD_SOLINUX_H */

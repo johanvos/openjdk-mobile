@@ -485,7 +485,10 @@ startChild(JNIEnv *env, jobject process, ChildStuff *c, const char *helperpath) 
 /* vfork(2) is deprecated on Solaris */
 #ifndef __solaris__
       case MODE_VFORK:
+#ifndef __ANDROID__
+        /* Android < 4.3 has stack corruption bug with vfork so use fork */
         return vforkChild(c);
+#endif
 #endif
       case MODE_FORK:
         return forkChild(c);

@@ -564,7 +564,17 @@ void notify_vm_shutdown() {
 void vm_direct_exit(int code) {
   notify_vm_shutdown();
   os::wait_for_keypress_at_exit();
+#ifndef __ANDROID__
   os::exit(code);
+#else
+  void (*system_exit_func)(int) = (void(*)(int))dlsym(RTLD_DEFAULT, "jl_system_exit");
+  if (system_exit_func != NULL) {
+    system_exit_func(code);
+  } else {
+    // Process may dump core but no other choice
+    os::exit(code);
+  }
+#endif
 }
 
 void vm_perform_shutdown_actions() {
@@ -672,10 +682,17 @@ const char* JDK_Version::_runtime_version;
 void JDK_Version::initialize() {
   jdk_version_info info;
   assert(!_current.is_valid(), "Don't initialize twice");
+  jdk_version_info_fn_t func = NULL;
 
+#ifndef STATIC_BUILD
   void *lib_handle = os::native_java_library();
-  jdk_version_info_fn_t func = CAST_TO_FN_PTR(jdk_version_info_fn_t,
+  func = CAST_TO_FN_PTR(jdk_version_info_fn_t,
      os::dll_lookup(lib_handle, "JDK_GetVersionInfo0"));
+#else
+  extern jdk_version_info_fn_t  JDK_GetVersionInfo0;
+  func = CAST_TO_FN_PTR(jdk_version_info_fn_t,
+     &JDK_GetVersionInfo0);
+#endif
 
   assert(func != NULL, "Support for JDK 1.5 or older has been removed after JEP-223");
 

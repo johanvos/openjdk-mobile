@@ -35,6 +35,11 @@
 #include <ifaddrs.h>
 #include <net/if.h>
 #endif
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#else
+#define TARGET_OS_IPHONE 0
+#endif
 
 #include "net_util.h"
 
@@ -87,6 +92,7 @@ Java_java_net_Inet6AddressImpl_getLocalHostName(JNIEnv *env, jobject this) {
                         NULL, 0, NI_NAMEREQD);
             freeaddrinfo(res);
         }
+#endif /* AF_INET6 */
     }
 #else
     } else {
@@ -658,7 +664,8 @@ ping6(JNIEnv *env, jint fd, SOCKETADDRESS *sa, SOCKETADDRESS *netif,
         timeout -= 1000;
     } while (timeout > 0);
     close(fd);
-    return JNI_FALSE;
+ #endif // !TARGET_OS_IPHONE
+   return JNI_FALSE;
 }
 
 /*

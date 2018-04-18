@@ -57,3 +57,15 @@ Java_jdk_internal_jimage_NativeImageBuffer_getNativeMap(JNIEnv *env,
 
     return 0;
 }
+extern "C" {
+    JNIEXPORT jint JNICALL
+    DEF_JNI_OnLoad(JavaVM *vm, void *reserved) {
+        JNIEnv *env;
+
+        if (vm->GetEnv((void**) &env, JNI_VERSION_1_2) != JNI_OK) {
+            return JNI_EVERSION; /* JNI version not supported */
+        }
+
+        return JNI_VERSION_1_2;
+    }
+}

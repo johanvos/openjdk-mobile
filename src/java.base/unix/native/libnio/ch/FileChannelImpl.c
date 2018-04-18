@@ -39,6 +39,11 @@
 
 #if defined(__linux__) || defined(__solaris__)
 #include <sys/sendfile.h>
+#ifdef __ANDROID__
+#define mmap64 mmap
+#include <sys/syscall.h>
+#define sendfile64(a,b,c,d) syscall(__NR_sendfile64, a, b, c, d);
+#endif
 #elif defined(_AIX)
 #include <sys/socket.h>
 #elif defined(_ALLBSD_SOURCE)

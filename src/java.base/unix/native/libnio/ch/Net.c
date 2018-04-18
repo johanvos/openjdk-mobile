@@ -58,40 +58,79 @@
 /**
  * IPV6_ADD_MEMBERSHIP/IPV6_DROP_MEMBERSHIP may not be defined on OSX and AIX
  */
-#if defined(__APPLE__) || defined(_AIX)
+#if defined(__APPLE__) || defined(_AIX) || defined(__ANDROID__)
   #ifndef IPV6_ADD_MEMBERSHIP
     #define IPV6_ADD_MEMBERSHIP     IPV6_JOIN_GROUP
     #define IPV6_DROP_MEMBERSHIP    IPV6_LEAVE_GROUP
   #endif
-#endif
+
+#ifndef IP_BLOCK_SOURCE
 
 #if defined(_AIX)
-  #ifndef IP_BLOCK_SOURCE
-    #define IP_BLOCK_SOURCE                 58   /* Block data from a given source to a given group */
-    #define IP_UNBLOCK_SOURCE               59   /* Unblock data from a given source to a given group */
-    #define IP_ADD_SOURCE_MEMBERSHIP        60   /* Join a source-specific group */
-    #define IP_DROP_SOURCE_MEMBERSHIP       61   /* Leave a source-specific group */
-  #endif
+  #define IP_BLOCK_SOURCE                 58   /* Block data from a given source to a given group */
+  #define IP_UNBLOCK_SOURCE               59   /* Unblock data from a given source to a given group */
+  #define IP_ADD_SOURCE_MEMBERSHIP        60   /* Join a source-specific group */
+  #define IP_DROP_SOURCE_MEMBERSHIP       61   /* Leave a source-specific group */
+#else
 
-  #ifndef MCAST_BLOCK_SOURCE
+  #define IP_ADD_SOURCE_MEMBERSHIP        70   /* join a source-specific group */
+  #define IP_DROP_SOURCE_MEMBERSHIP       71   /* drop a single source */
+  #define IP_BLOCK_SOURCE                 72   /* block a source */
+  #define IP_UNBLOCK_SOURCE               73   /* unblock a source */
+
+#endif /* _AIX */
+
+#endif /* IP_BLOCK_SOURCE */
+
+#ifndef MCAST_BLOCK_SOURCE
+  #if defined(_AIX)
+
     #define MCAST_BLOCK_SOURCE              64
     #define MCAST_UNBLOCK_SOURCE            65
     #define MCAST_JOIN_SOURCE_GROUP         66
     #define MCAST_LEAVE_SOURCE_GROUP        67
 
+  #else
+    #define MCAST_JOIN_SOURCE_GROUP         82   /* join a source-specific group */
+    #define MCAST_LEAVE_SOURCE_GROUP        83   /* leave a single source */
+    #define MCAST_BLOCK_SOURCE              84   /* block a source */
+    #define MCAST_UNBLOCK_SOURCE            85   /* unblock a source */
+
+  #endif /* _AIX */
+
+#endif /* MCAST_BLOC_SOURCE */
+
+#if defined(_AIX)
     /* This means we're on AIX 5.3 and 'group_source_req' and 'ip_mreq_source' aren't defined as well */
-    struct group_source_req {
-        uint32_t gsr_interface;
-        struct sockaddr_storage gsr_group;
-        struct sockaddr_storage gsr_source;
-    };
-    struct ip_mreq_source {
-        struct in_addr  imr_multiaddr;  /* IP multicast address of group */
-        struct in_addr  imr_sourceaddr; /* IP address of source */
-        struct in_addr  imr_interface;  /* local IP address of interface */
-    };
-  #endif
+
+struct my_ip_mreq_source {
+        struct in_addr  imr_multiaddr;
+        struct in_addr  imr_sourceaddr;
+        struct in_addr  imr_interface;
+};
+
+#else
+
+struct my_ip_mreq_source {
+        struct in_addr  imr_multiaddr;
+        struct in_addr  imr_interface;
+        struct in_addr  imr_sourceaddr;
+};
+
 #endif /* _AIX */
+
+struct my_group_source_req {
+        uint32_t                gsr_interface;  /* interface index */
+        struct sockaddr_storage gsr_group;      /* group address */
+        struct sockaddr_storage gsr_source;     /* source address */
+};
+
+#else   /* _ALLBSD_SOURCE */
+
+#define my_ip_mreq_source         ip_mreq_source
+#define my_group_source_req       group_source_req
+
+#endif /* _ALLBSD_SOURCE */
 
 #define COPY_INET6_ADDRESS(env, source, target) \
     (*env)->GetByteArrayRegion(env, source, 0, 16, target)
@@ -190,6 +229,30 @@ Java_sun_nio_ch_Net_canJoin6WithIPv4Group0(JNIEnv* env, jclass cl)
 #endif
 }
 
+#ifdef __ANDROID__
+// See comment in Java_sun_nio_ch_Net_socket0
+static void get_set_sockopt(int fd, int opt)
+{
+    int result;
+    void *arg = (void *)&result;
+    socklen_t arglen = sizeof(result);
+    // Since this is android we know that the ProtocolFamily is UNSPEC,
+    // (mayNeedConversion == 1) so call NET_GetSockOpt vs. {get,set}sockopt
+    // and level is 1.
+    // see SocketOptionRegistry-android-{arm,x86}.java
+    int n = NET_GetSockOpt(fd, 1, opt, arg, (int*)&arglen);
+    // Just let the original behavior occur on error, since
+    // this is "special" initialization
+    if (n < 0) {
+        return;
+    }
+    n = NET_SetSockOpt(fd, 1, opt, arg, arglen);
+    if (n < 0) {
+        return;
+    }
+}
+#endif
+
 JNIEXPORT jint JNICALL
 Java_sun_nio_ch_Net_socket0(JNIEnv *env, jclass cl, jboolean preferIPv6,
                             jboolean stream, jboolean reuse, jboolean ignored)
@@ -254,6 +317,21 @@ Java_sun_nio_ch_Net_socket0(JNIEnv *env, jclass cl, jboolean preferIPv6,
             return -1;
         }
     }
+#endif
+#ifdef __ANDROID__
+    // JDK-8001645 - JCK failures in java_api/nio/channel
+    // On some devices the initial value returned from
+    // getSocketOption for SO_SNDBUF and SO_RCVBUF can be
+    // greater than the configured system maximum. The jck tests
+    //   api/java_nio/channels/Asynchronous{ServerSocket,Socket}Channel/
+    //          Asynchronous{ServerSocket,Socket}Channel_NetworkChannel
+    // fail because of a test assumption that the initial value for these
+    // options should be less than the maximum value.
+    // In order to pass the test, read the value and then write it.
+    // The system behavior sets the value to the maximum value
+    // if the "hint" is greater than the maximum value.
+    get_set_sockopt(fd, SO_RCVBUF);
+    get_set_sockopt(fd, SO_SNDBUF);
 #endif
     return fd;
 }
@@ -483,7 +561,7 @@ Java_sun_nio_ch_Net_joinOrDrop4(JNIEnv *env, jobject this, jboolean join, jobjec
                                 jint group, jint interf, jint source)
 {
     struct ip_mreq mreq;
-    struct ip_mreq_source mreq_source;
+    struct my_ip_mreq_source mreq_source;
     int opt, n, optlen;
     void* optval;
 
@@ -527,7 +605,7 @@ Java_sun_nio_ch_Net_blockOrUnblock4(JNIEnv *env, jobject this, jboolean block, j
     /* no IPv4 exclude-mode filtering for now */
     return IOS_UNAVAILABLE;
 #else
-    struct ip_mreq_source mreq_source;
+    struct my_ip_mreq_source mreq_source;
     int n;
     int opt = (block) ? IP_BLOCK_SOURCE : IP_UNBLOCK_SOURCE;
 
@@ -558,7 +636,7 @@ Java_sun_nio_ch_Net_joinOrDrop6(JNIEnv *env, jobject this, jboolean join, jobjec
                                 jbyteArray group, jint index, jbyteArray source)
 {
     struct ipv6_mreq mreq6;
-    struct group_source_req req;
+    struct my_group_source_req req;
     int opt, n, optlen;
     void* optval;
 

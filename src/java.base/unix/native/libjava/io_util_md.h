@@ -74,13 +74,17 @@ FD handleOpen(const char *path, int oflag, int mode);
 #define IO_SetLength handleSetLength
 #define IO_GetLength handleGetLength
 
-#ifdef _ALLBSD_SOURCE
+#if defined(_ALLBSD_SOURCE) || defined(__ANDROID__)
 #define open64 open
 #define fstat64 fstat
 #define stat64 stat
+#ifdef __ANDROID__
+#define IO_Lseek lseek64
+#else
+#define IO_Lseek lseek
 #define lseek64 lseek
 #define ftruncate64 ftruncate
-#define IO_Lseek lseek
+#endif
 #else
 #define IO_Lseek lseek64
 #endif

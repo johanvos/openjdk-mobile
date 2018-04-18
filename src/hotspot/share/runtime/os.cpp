@@ -77,6 +77,7 @@ volatile unsigned int os::_rand_seed      = 1;
 int               os::_processor_count    = 0;
 int               os::_initial_active_processor_count = 0;
 size_t            os::_page_sizes[os::page_sizes_max];
+const char *      os::_java_home = NULL;
 
 #ifndef PRODUCT
 julong os::num_mallocs = 0;         // # of calls to malloc/realloc

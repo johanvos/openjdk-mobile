@@ -713,14 +713,6 @@ void unix_getCmdlineAndUserInfo(JNIEnv *env, jobject jinfo, pid_t pid) {
      */
     strncpy(prargs, psinfo.pr_psargs, PRARGSZ);
     prargs[PRARGSZ] = '\0';
-    if (prargs[0] == '\0') {
-        /* If psinfo.pr_psargs didn't contain any strings, use psinfo.pr_fname
-         * (which only contains the last component of exec()ed pathname) as a
-         * last resort. This is true for AIX kernel processes for example.
-         */
-        strncpy(prargs, psinfo.pr_fname, PRARGSZ);
-        prargs[PRARGSZ] = '\0';
-    }
     unix_fillArgArray(env, jinfo, 0, NULL, NULL, cmdexe,
                       prargs[0] == '\0' ? NULL : prargs);
 }

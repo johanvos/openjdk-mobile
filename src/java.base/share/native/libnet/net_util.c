@@ -203,6 +203,7 @@ jobject getInetAddress_hostName(JNIEnv *env, jobject iaObj) {
 JNIEXPORT jobject JNICALL
 NET_SockaddrToInetAddress(JNIEnv *env, SOCKETADDRESS *sa, int *port) {
     jobject iaObj;
+#ifdef AF_INET6
     if (sa->sa.sa_family == AF_INET6) {
         jbyte *caddr = (jbyte *)&sa->sa6.sin6_addr;
         if (NET_IsIPv4Mapped(caddr)) {
@@ -223,7 +224,9 @@ NET_SockaddrToInetAddress(JNIEnv *env, SOCKETADDRESS *sa, int *port) {
             setInet6Address_scopeid(env, iaObj, sa->sa6.sin6_scope_id);
         }
         *port = ntohs(sa->sa6.sin6_port);
-    } else {
+    } else
+#endif /* AF_INET6 */
+      {
         iaObj = (*env)->NewObject(env, ia4_class, ia4_ctrID);
         CHECK_NULL_RETURN(iaObj, NULL);
         setInetAddress_family(env, iaObj, java_net_InetAddress_IPv4);
@@ -236,7 +239,10 @@ NET_SockaddrToInetAddress(JNIEnv *env, SOCKETADDRESS *sa, int *port) {
 JNIEXPORT jboolean JNICALL
 NET_SockaddrEqualsInetAddress(JNIEnv *env, SOCKETADDRESS *sa, jobject iaObj)
 {
-    jint family = getInetAddress_family(env, iaObj) ==
+    jint family = AF_INET;
+
+#ifdef AF_INET6
+    family = getInetAddress_family(env, iaObj) ==
         java_net_InetAddress_IPv4 ? AF_INET : AF_INET6;
     if (sa->sa.sa_family == AF_INET6) {
         jbyte *caddrNew = (jbyte *)&sa->sa6.sin6_addr;
@@ -266,7 +272,9 @@ NET_SockaddrEqualsInetAddress(JNIEnv *env, SOCKETADDRESS *sa, jobject iaObj)
                 return JNI_FALSE;
             }
         }
-    } else {
+    } else
+#endif /* AF_INET6 */
+        {
         int addrNew, addrCur;
         if (family != AF_INET) {
             return JNI_FALSE;

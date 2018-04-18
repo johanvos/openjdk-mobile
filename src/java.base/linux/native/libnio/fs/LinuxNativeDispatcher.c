@@ -168,6 +168,7 @@ Java_sun_nio_fs_LinuxNativeDispatcher_setmntent0(JNIEnv* env, jclass this, jlong
     return ptr_to_jlong(fp);
 }
 
+
 JNIEXPORT jint JNICALL
 Java_sun_nio_fs_LinuxNativeDispatcher_getmntent(JNIEnv* env, jclass this,
     jlong value, jobject entry)
