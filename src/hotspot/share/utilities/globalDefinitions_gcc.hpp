@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (c) 1998, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -215,11 +215,33 @@ inline int g_isnan(double f) { return isnan(f); }
 #define CAN_USE_NAN_DEFINE 1
 #endif
 
+// Xcode -Ofast optimization level did not handle
+// NaN comparisons properly for aarch64 compiles.
+// XXX Added #if 0 so that we detect whether it still fails with recent
+// XCode version. The #if rule should take into account the last version
+// for which we know it fails instead activating this slower path for
+// all future versions.
+#if 0 && defined(__clang__) && defined(AARCH64)
+#undef  NON_COMPLIANT_NAN_COMPARE
+#define NON_COMPLIANT_NAN_COMPARE
+#endif
+
 
 // Checking for finiteness
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#else
+#define TARGET_OS_IPHONE 0
+#endif
 
+#if TARGET_OS_IPHONE
+#define USE_LIBRARY_BASED_TLS_ONLY
+inline int g_isfinite(jfloat  f)                 { return isfinite(f); }
+inline int g_isfinite(jdouble f)                 { return isfinite(f); }
+#else
 inline int g_isfinite(jfloat  f)                 { return finite(f); }
 inline int g_isfinite(jdouble f)                 { return finite(f); }
+#endif
 
 
 // Wide characters
