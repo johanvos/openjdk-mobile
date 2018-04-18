@@ -78,7 +78,7 @@ SHELL := $(BASH) $(BASH_ARGS)
 # Set some reasonable defaults for features
 DEBUG_LEVEL := release
 HOTSPOT_DEBUG_LEVEL := release
-BUILD_GTEST := true
+BUILD_GTEST := false
 BUILD_FAILURE_HANDLER := true
 
 ################################################################################
